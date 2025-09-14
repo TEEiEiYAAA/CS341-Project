@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <title>DermaVision - อัปโหลดรูปผิวหน้า</title>
+  <style>
+    body { font-family:sans-serif; background:#f9fafb; color:#111; display:flex; justify-content:center; align-items:center; min-height:100vh; }
+    .box { background:#fff; padding:24px; border-radius:12px; box-shadow:0 4px 20px rgba(0,0,0,.1); width:100%; max-width:400px; }
+    h1 { font-size:20px; margin-bottom:16px; }
+    label { display:block; margin-bottom:10px; }
+    input[type="text"], input[type="file"] {
+      width:100%; padding:8px 10px; margin-top:6px;
+      border:1px solid #ccc; border-radius:8px;
+    }
+    button { margin-top:16px; width:100%; padding:10px; border:none; border-radius:8px;
+      background:#2563eb; color:#fff; font-size:16px; cursor:pointer; }
+    button:hover { background:#1d4ed8; }
+    .status { margin-top:12px; font-size:14px; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h1>อัปโหลดรูปผิวหน้า</h1>
+    <label>
+      รหัสผู้ใช้ (User ID)
+      <input id="userId" type="text" placeholder="เช่น U001" value="U001" />
+    </label>
+    <label>
+      เลือกรูป (.jpg / .png)
+      <input id="file" type="file" accept=".jpg,.jpeg,.png,image/jpeg,image/png" />
+    </label>
+    <button id="btnUpload">อัปโหลด</button>
+    <div id="status" class="status">พร้อมอัปโหลด</div>
+  </div>
+
+  <script>
+    const API_BASE = "https://74gg5hsgxk.execute-api.us-east-1.amazonaws.com"; // <- ใส่ URL ของ API Gateway
+
+    document.getElementById("btnUpload").addEventListener("click", async () => {
+      const status = document.getElementById("status");
+      const userId = document.getElementById("userId").value || "anonymous";
+      const file = document.getElementById("file").files[0];
+      if (!file) {
+        status.textContent = "กรุณาเลือกรูปก่อนอัปโหลด";
+        return;
+      }
+
+      try {
+        status.textContent = "กำลังขอ Presigned URL...";
+        const ext = file.name.split('.').pop().toLowerCase() || "jpg";
+        const pres = await fetch(`${API_BASE}/presign?userId=${encodeURIComponent(userId)}&ext=${ext}`);
+        if (!pres.ok) throw new Error("Presign request failed");
+        const data = await pres.json();
+
+        const form = new FormData();
+        Object.entries(data.upload.fields).forEach(([k,v]) => form.append(k, v));
+        form.append("file", file);
+
+        status.textContent = "กำลังอัปโหลด...";
+        const resp = await fetch(data.upload.url, { method: "POST", body: form });
+        if (!resp.ok) throw new Error("Upload failed: " + resp.status);
+
+        status.textContent = "✅ อัปโหลดสำเร็จ!";
+      } catch (err) {
+        status.textContent = "❌ เกิดข้อผิดพลาด: " + err.message;
+      }
+    });
+  </script>
+</body>
+</html>
