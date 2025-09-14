@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="th">
+<head><meta charset="utf-8"><title>Upload a File</title></head>
+<body>
+  <h2>Upload a File</h2>
+  <input type="file" id="fileInput">
+  <button id="btn">Upload</button>
+
+  <script>
+    const API = "https://vy9b2etogd.execute-api.us-east-1.amazonaws.com/prod/get-presigned-url";
+
+    document.getElementById('btn').onclick = async () => {
+      const file = document.getElementById('fileInput').files[0];
+      if (!file) { alert('เลือกไฟล์ก่อน'); return; }
+
+      try {
+        // 1) ขอ pre-signed URL
+        const qs = new URLSearchParams({ filename: file.name, contentType: file.type });
+        const res = await fetch(`${API}?${qs.toString()}`, { method: 'GET' });
+        if (!res.ok) throw new Error('get presigned failed');
+        const data = await res.json();
+
+        // 2) PUT ขึ้น S3 ด้วย URL ที่ได้
+        const putRes = await fetch(data.uploadUrl, {
+          method: 'PUT',
+          headers: { 'Content-Type': file.type },
+          body: file
+        });
+        if (!putRes.ok) throw new Error('upload failed');
+
+        alert('อัปโหลดสำเร็จ!\nKey: ' + data.objectKey);
+      } catch (e) {
+        console.error(e);
+        alert('Failed to upload file.');
+      }
+    };
+  </script>
+</body>
+</html>
