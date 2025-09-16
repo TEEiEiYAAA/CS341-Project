@@ -1,3 +1,0 @@
-python --version
-pip install -r requirements.txt
-python ingest_dataset.py "Face Skin Problems.v1i.coco.zip"
