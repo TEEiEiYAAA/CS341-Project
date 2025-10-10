@@ -186,3 +186,9 @@ def handler(event, context):
             print(f"ERROR processing (land): {src_key}: {e}")
 
     return {"ok": True, "processed": processed}
+
+lambda_client = boto3.client("lambda")
+
+# หลังแตก zip ทั้งหมดเสร็จ
+lambda_client.invoke(FunctionName="preprocess-images", InvocationType="Event")
+lambda_client.invoke(FunctionName="coco-to-rek-manifest", InvocationType="Event")
