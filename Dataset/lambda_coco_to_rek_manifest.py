@@ -69,3 +69,17 @@ def handler(event, context):
     _put_jsonl(val_items,   f"{OUT_PREFIX}val.manifest")
 
     return {"ok": True, "train": len(train_items), "val": len(val_items), "classes": cats}
+
+lambda_client = boto3.client("lambda")
+VALIDATE_FN = os.environ.get("VALIDATE_FN", "validate-dataset")
+
+# ... หลังจากเขียน train/val manifest เสร็จ:
+try:
+    payload = {"bucket": os.environ["BUCKET"], "dataset": os.environ.get("DATASET_NAME","")}
+    lambda_client.invoke(
+        FunctionName=VALIDATE_FN,
+        InvocationType="Event",  # async
+        Payload=json.dumps(payload).encode("utf-8")
+    )
+except Exception as e:
+    print("WARN: cannot invoke validate-dataset:", e)
