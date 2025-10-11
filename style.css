@@ -1,0 +1,217 @@
+/* General Styling */
+:root {
+    --bg-color: #FBF6F1;
+    --card-bg-color: #F5F2EF;
+    --text-color: #4A4A4A;
+    --border-radius: 24px;
+    --shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+}
+
+.logo {
+  height: 38px; /* กำหนดความสูงของโลโก้ (ปรับค่าได้ตามความเหมาะสม) */
+  width: auto; /* ความกว้างจะปรับตามอัตโนมัติ */
+  object-fit: contain;
+  vertical-align: middle; /* ช่วยจัดตำแหน่งให้อยู่กึ่งกลางแนวตั้ง */
+}
+
+body {
+    font-family: 'Sarabun', sans-serif;
+    background-color: #eae4d8;
+    color: var(--text-color);
+    margin: 0;
+    display: flex;
+    min-height: 100vh;
+    transition: background-color 0.3s;
+}
+
+/* Sidebar Navigation */
+.sidebar {
+    background-color: var(--card-bg-color);
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow);
+    margin: 24px;
+    padding: 32px;
+    min-width: 250px;
+    height: calc(100vh - 48px);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    transition: transform 0.3s ease-in-out;
+}
+
+.sidebar-header-mobile {
+    display: none; /* Hidden on desktop */
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 32px;
+}
+
+.sidebar-top, .sidebar-bottom {
+    display: flex;
+    flex-direction: column;
+}
+
+.nav-link {
+    text-decoration: none;
+    color: var(--text-color);
+    padding: 12px 0;
+    font-size: 1.1rem;
+    font-weight: 500;
+}
+
+.nav-link.active {
+    font-weight: 700;
+}
+
+/* Main Content Area */
+.main-container {
+    flex-grow: 1;
+    padding: 24px;
+    padding-left: 0;
+}
+
+.main-header {
+    display: none; /* Hidden on desktop */
+    align-items: center;
+    margin-bottom: 24px;
+}
+
+.menu-button {
+    background: none;
+    border: none;
+    font-size: 2rem;
+    cursor: pointer;
+    color: var(--text-color);
+    padding: 0;
+    margin-right: 16px;
+}
+
+#close-menu {
+    font-size: 2.5rem;
+    line-height: 1;
+}
+
+.card {
+    background-color: var(--card-bg-color);
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow);
+    padding: 24px 32px;
+    margin-bottom: 24px;
+}
+
+.upload-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.card-title {
+    font-size: 1.2rem;
+    font-weight: 700;
+    margin: 0 0 8px 0;
+}
+
+.file-name-text {
+    color: #888;
+    font-size: 0.9rem;
+}
+
+.upload-btn {
+    background-color: #FFFFFF;
+    border: none;
+    border-radius: 99px; /* Pill shape */
+    padding: 12px 28px;
+    font-family: 'Sarabun', sans-serif;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text-color);
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    white-space: nowrap;
+}
+
+.results-card {
+    min-height: 200px;
+}
+
+.status {
+    margin-top: 16px;
+    font-size: 1rem;
+    color: #555;
+}
+
+.overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.4);
+    z-index: 9;
+}
+
+/* --- Responsive Design --- */
+
+/* Medium Screens (e.g., Tablets) */
+@media (max-width: 1024px) {
+    body {
+        flex-direction: column;
+    }
+
+    .sidebar {
+        position: fixed;
+        left: 0;
+        top: 0;
+        height: 100%;
+        margin: 0;
+        border-radius: 0 24px 24px 0;
+        transform: translateX(-100%);
+        z-index: 10;
+    }
+    
+    .sidebar.open {
+        transform: translateX(0);
+    }
+    
+    .overlay.active {
+        display: block;
+    }
+
+    .sidebar-header-mobile {
+        display: flex;
+    }
+    
+    .main-container {
+        padding: 24px;
+    }
+
+    .main-header {
+        display: flex;
+    }
+}
+
+/* Small Screens (e.g., Mobile Phones) */
+@media (max-width: 768px) {
+    .main-container {
+        padding: 16px;
+    }
+    
+    .card {
+        padding: 20px;
+    }
+
+    .upload-card {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .file-info {
+        margin-bottom: 16px;
+    }
+
+    .upload-btn {
+        width: 100%;
+        padding: 14px;
+    }
+}
