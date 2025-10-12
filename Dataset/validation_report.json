@@ -1,0 +1,61 @@
+{
+  "dataset": "skin-2025-09",
+  "checks": [
+    {
+      "name": "load_coco",
+      "ok": true,
+      "counts": {
+        "images": 1130,
+        "annotations": 14439,
+        "categories": 11
+      }
+    },
+    {
+      "name": "schema_required_keys",
+      "ok": true,
+      "detail": {
+        "images": [],
+        "annotations": [],
+        "categories": []
+      }
+    },
+    {
+      "name": "duplicate",
+      "ok": true,
+      "detail": {
+        "image_id": [],
+        "file_name": [],
+        "ann_id": []
+      }
+    },
+    {
+      "name": "raw_files_consistency",
+      "ok": true,
+      "missing_in_s3": [],
+      "orphan_in_s3": [],
+      "counts": {
+        "coco_files": 1130,
+        "raw_files": 1130
+      }
+    },
+    {
+      "name": "processed_consistency",
+      "ok": true,
+      "detail": {
+        "missing_in_processed": [],
+        "orphan_in_processed": []
+      },
+      "counts": {
+        "processed_files": 1130
+      }
+    }
+  ],
+  "summary": {
+    "ok": true,
+    "images_coco": 1130,
+    "images_raw": 1130,
+    "images_processed": 1130,
+    "annotations": 14439,
+    "categories": 11
+  }
+}
