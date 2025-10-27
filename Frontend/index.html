@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="th">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/x-icon" href="./Image/favicon.ico">
+  <title>DermaVision</title>
+  <link rel="stylesheet" href="./CSS/style.css">
+</head>
+
+<body>
+  <nav class="sidebar">
+    <div class="sidebar-header">
+      <img src="./Image/logo.png" alt="DermaVision AI Logo" class="logo">
+      <button id="close-menu" class="menu-button">&times;</button>
+    </div>
+    <div class="sidebar-top">
+      <a href="./index.html" class="nav-link active">Home</a>
+      <a href="./Html/Tutorial.html" class="nav-link">Tutorial</a>
+      <a href="./Html/About.html" class="nav-link">About us</a>
+    </div>
+    <div class="sidebar-bottom">
+      <a href="./Html/UA.html" class="nav-link">User Agreements</a>
+    </div>
+  </nav>
+
+  <div class="main-content">
+    <header class="main-header">
+      <button id="hamburger-menu" class="menu-button">&#9776;</button>
+      <img src="./Image/logo.png" alt="DermaVision AI Logo" class="logo">
+    </header>
+    <main>
+      <div id="upload-form" class="card upload-card">
+        <p class="card-title">รหัสผู้ใช้</p>
+        <input id="userId" type="text" placeholder="เช่น U001" class="text-input" value="U001" />
+
+        <p class="card-title">อัปโหลดผิวหน้า</p>
+        <div class="file-upload-wrapper">
+          <div class="file-display-box">
+            <span id="file-name-text">&lt;No File Chosen...&gt;</span>
+            <button id="remove-file-btn" class="remove-file-btn hidden">&times;</button>
+          </div>
+          <label for="file" class="action-button">อัปโหลด</label>
+          <div class="file-size-limit">ไม่เกิน 32 MB</div>
+        </div>
+        <input id="file" type="file" accept=".jpg,.jpeg,.png,image/jpeg,image/png" class="hidden" />
+
+        <button id="btnUpload" class="process-button" disabled>ประมวลผล</button>
+        <p class="disclaimer">ผลลัพธ์จะขึ้นอยู่กับหลายปัจจัย เช่น คุณภาพภาพ, แสงเงา และ ความชัดของภาพ
+          ดังนั้นโปรดตรวจสอบก่อนประมวลผล</p>
+        <div id="status" class="status"></div>
+      </div>
+
+      <div class="card results-card">
+        <p class="card-title">ผลลัพธ์</p>
+      </div>
+    </main>
+  </div>
+
+  <div id="wrong-type-modal" class="modal-overlay hidden">
+    <div class="modal">
+      <p>Wrong File Type!</p>
+      <button id="wrong-type-clear-btn" class="modal-button clear-btn">Clear</button>
+    </div>
+  </div>
+
+  <div id="confirm-clear-modal" class="modal-overlay hidden">
+    <div class="modal">
+      <button id="close-confirm-modal-btn" class="close-modal-btn">&times;</button>
+      <p>Are you sure?</p>
+      <button id="confirm-clear-btn" class="modal-button clear-btn">Clear</button>
+    </div>
+  </div>
+  <script>
+    const API_BASE = " https://wzs3lu83ng.execute-api.us-east-1.amazonaws.com"; // <- ใส่ URL ของ API Gateway
+
+    document.getElementById("btnUpload").addEventListener("click", async () => {
+      const status = document.getElementById("status");
+      const userId = document.getElementById("userId").value || "anonymous";
+      const file = document.getElementById("file").files[0];
+      if (!file) {
+        status.textContent = "กรุณาเลือกรูปก่อนอัปโหลด";
+        return;
+      }
+
+      try {
+        status.textContent = "กำลังขอ Presigned URL...";
+        const ext = file.name.split('.').pop().toLowerCase() || "jpg";
+        const pres = await fetch(`${API_BASE}/presign?userId=${encodeURIComponent(userId)}&ext=${ext}`);
+        if (!pres.ok) throw new Error("Presign request failed");
+        const data = await pres.json();
+
+        const form = new FormData();
+        Object.entries(data.upload.fields).forEach(([k, v]) => form.append(k, v));
+        form.append("file", file);
+
+        status.textContent = "กำลังอัปโหลด...";
+        const resp = await fetch(data.upload.url, { method: "POST", body: form });
+        if (!resp.ok) throw new Error("Upload failed: " + resp.status);
+
+        status.textContent = "✅ อัปโหลดสำเร็จ!";
+      } catch (err) {
+        status.textContent = "❌ เกิดข้อผิดพลาด: " + err.message;
+      }
+    });
+  </script>
+
+  <script>
+    // ---------- NEW UI SCRIPT ----------
+    document.addEventListener('DOMContentLoaded', () => {
+      // UI Elements
+      const hamburgerMenu = document.getElementById('hamburger-menu');
+      const closeMenu = document.getElementById('close-menu');
+      const sidebar = document.querySelector('.sidebar');
+      const fileInput = document.getElementById('file');
+      const fileNameText = document.getElementById('file-name-text');
+      const removeFileBtn = document.getElementById('remove-file-btn');
+      const processBtn = document.getElementById('btnUpload'); // This is the old "Upload" button, now repurposed for "Process"
+
+      // Modals
+      const wrongTypeModal = document.getElementById('wrong-type-modal');
+      const confirmClearModal = document.getElementById('confirm-clear-modal');
+      const wrongTypeClearBtn = document.getElementById('wrong-type-clear-btn');
+      const confirmClearBtn = document.getElementById('confirm-clear-btn');
+      const closeConfirmModalBtn = document.getElementById('close-confirm-modal-btn');
+
+      const allowedTypes = ['image/jpeg', 'image/png'];
+
+      // --- Sidebar/Menu Logic ---
+      if (hamburgerMenu && sidebar) {
+        hamburgerMenu.addEventListener('click', () => {
+          sidebar.classList.add('open');
+        });
+      }
+
+      if (closeMenu && sidebar) {
+        closeMenu.addEventListener('click', () => {
+          sidebar.classList.remove('open');
+        });
+      }
+
+      // --- File Handling Logic ---
+      const resetFileInput = () => {
+        fileInput.value = ''; // Clear the selected file
+        fileNameText.textContent = '<No File Chosen...>';
+        fileNameText.classList.remove('selected');
+        removeFileBtn.classList.add('hidden');
+        processBtn.disabled = true;
+        const statusEl = document.getElementById('status');
+        if (statusEl) {
+          statusEl.textContent = ''; // Also clear status from old script
+        }
+      };
+
+      if (fileInput) {
+        fileInput.addEventListener('change', () => {
+          const file = fileInput.files[0];
+          if (file) {
+            // Validate file type
+            if (allowedTypes.includes(file.type)) {
+              fileNameText.textContent = file.name;
+              fileNameText.classList.add('selected');
+              removeFileBtn.classList.remove('hidden');
+              processBtn.disabled = false;
+            } else {
+              // Wrong file type
+              resetFileInput();
+              wrongTypeModal.classList.remove('hidden');
+            }
+          } else {
+            // If user cancels file selection
+            resetFileInput();
+          }
+        });
+      }
+
+      // --- Modal and Button Logic ---
+      if (removeFileBtn) {
+        removeFileBtn.addEventListener('click', () => {
+          confirmClearModal.classList.remove('hidden');
+        });
+      }
+
+      if (wrongTypeClearBtn) {
+        wrongTypeClearBtn.addEventListener('click', () => {
+          wrongTypeModal.classList.add('hidden');
+        });
+      }
+
+      if (confirmClearBtn) {
+        confirmClearBtn.addEventListener('click', () => {
+          resetFileInput();
+          confirmClearModal.classList.add('hidden');
+        });
+      }
+
+      if (closeConfirmModalBtn) {
+        closeConfirmModalBtn.addEventListener('click', () => {
+          confirmClearModal.classList.add('hidden');
+        });
+      }
+    });
+    // ---------- END NEW UI SCRIPT ----------
+  </script>
+
+</body>
+
+</html>
