@@ -20,7 +20,7 @@ LABEL_ATTR = "bounding-box"  # Rekognition spec key
 ENABLE_BALANCE     = os.environ.get("ENABLE_BALANCE", "true").lower() == "true"
 PER_CLASS_CAP      = int(os.environ.get("PER_CLASS_CAP", "90"))   # ภาพ/คลาส สูงสุด
 MIN_CLASS_IMAGES   = int(os.environ.get("MIN_CLASS_IMAGES", "40")) # ตัดคลาสที่ภาพน้อยเกินไป
-MIN_BOX_PX         = int(os.environ.get("MIN_BOX_PX", "12"))        # ตัดกล่องเล็กจิ๋ว
+MIN_BOX_PX         = int(os.environ.get("MIN_BOX_PX", "6"))        # ตัดกล่องเล็กจิ๋ว
 MAX_BOX_PER_IMAGE  = int(os.environ.get("MAX_BOX_PER_IMAGE", "50"))# กัน overflow Rekognition
 # -------------------------------
 
