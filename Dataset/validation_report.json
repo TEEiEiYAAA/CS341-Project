@@ -1,10 +1,17 @@
 {
   "dataset": "skin-2025-09",
+  "generated_at": "2025-11-01T09:17:20Z",
+  "paths": {
+    "raw_images_prefix": "datasets/skin-2025-09/raw/images/",
+    "raw_coco_key": "datasets/skin-2025-09/raw/annotations/coco.json",
+    "processed_prefix": "datasets/skin-2025-09/preprocessed/",
+    "report_key": "datasets/skin-2025-09/manifest/validation_report.json"
+  },
   "checks": [
     {
       "name": "load_coco",
       "ok": true,
-      "counts": {
+      "detail": {
         "images": 1130,
         "annotations": 14439,
         "categories": 11
@@ -14,48 +21,76 @@
       "name": "schema_required_keys",
       "ok": true,
       "detail": {
-        "images": [],
-        "annotations": [],
-        "categories": []
+        "missing": []
       }
     },
     {
-      "name": "duplicate",
+      "name": "duplicates",
       "ok": true,
       "detail": {
         "image_id": [],
-        "file_name": [],
-        "ann_id": []
+        "file_name": []
       }
     },
     {
       "name": "raw_files_consistency",
       "ok": true,
-      "missing_in_s3": [],
-      "orphan_in_s3": [],
-      "counts": {
-        "coco_files": 1130,
-        "raw_files": 1130
+      "detail": {
+        "raw_prefix": "datasets/skin-2025-09/raw/images/",
+        "count": {
+          "coco_images": 1130,
+          "raw_files": 1130
+        },
+        "missing_in_raw": [],
+        "orphan_in_raw": []
       }
     },
     {
       "name": "processed_consistency",
       "ok": true,
       "detail": {
+        "proc_prefix": "datasets/skin-2025-09/preprocessed/images/",
+        "count": {
+          "coco_images": 1130,
+          "processed_files": 1130
+        },
         "missing_in_processed": [],
         "orphan_in_processed": []
-      },
-      "counts": {
-        "processed_files": 1130
       }
     }
   ],
   "summary": {
-    "ok": true,
-    "images_coco": 1130,
-    "images_raw": 1130,
-    "images_processed": 1130,
+    "imgs_coco": 1130,
+    "imgs_raw": 1130,
+    "imgs_processed": 1130,
     "annotations": 14439,
-    "categories": 11
+    "categories": 11,
+    "train_manifest": 801,
+    "val_manifest": 88,
+    "balanced": true,
+    "train_per_class": {
+      "Wrinkles": 677,
+      "Eyebags": 431,
+      "Whiteheads": 619,
+      "Acne": 3180,
+      "Oily-Skin": 437,
+      "Dark-Spots": 3705,
+      "Dry-Skin": 595,
+      "Skin-Redness": 556,
+      "Blackheads": 358,
+      "Englarged-Pores": 416
+    },
+    "val_per_class": {
+      "Dry-Skin": 60,
+      "Dark-Spots": 428,
+      "Whiteheads": 60,
+      "Acne": 340,
+      "Blackheads": 68,
+      "Oily-Skin": 60,
+      "Eyebags": 41,
+      "Skin-Redness": 49,
+      "Wrinkles": 86,
+      "Englarged-Pores": 52
+    }
   }
 }

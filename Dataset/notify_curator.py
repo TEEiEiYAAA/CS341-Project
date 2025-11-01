@@ -2,7 +2,7 @@
 import json, os, boto3, traceback
 
 lam = boto3.client("lambda")
-OFFLINE_FN = os.environ.get("OFFLINE_CURATOR_FN", "offline-curator")
+OFFLINE_FN = os.environ.get("OFFLINE_CURATOR_FN", "offline_curator")
 
 def handler(event, context):
     try:

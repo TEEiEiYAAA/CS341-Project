@@ -1,54 +1,36 @@
-import os
-import io
-import json
-import random
-import boto3
-import time
-import re
-import difflib
+import os, io, json, random, boto3, time, re, difflib
 from datetime import datetime
+from collections import defaultdict
 
 s3 = boto3.client("s3")
 
-# --------- CONFIG ---------
+# -------- CONFIG --------
 BUCKET    = os.environ.get("BUCKET", "dermavision-offline")
 DATASET   = os.environ.get("DATASET_NAME", "skin-2025-09")
 VAL_SPLIT = float(os.environ.get("VAL_SPLIT", "0.1"))
 
-ANN_KEY    = f"datasets/{DATASET}/raw/annotations/coco.json"
+ANN_KEY   = os.environ.get("ANN_KEY", f"datasets/{DATASET}/raw/annotations/coco.json")
 IMG_PREFIX = f"datasets/{DATASET}/preprocessed/images/"
 OUT_PREFIX = f"datasets/{DATASET}/manifest/"
 READY_KEY  = f"datasets/{DATASET}/preprocessed/_READY"
 
-LABEL_ATTR = "bounding-box"  # Rekognition default
+LABEL_ATTR = "bounding-box"  # Rekognition spec key
 
-# ---- Bounding box policy (adaptive) ----
-MIN_W = int(os.environ.get("MIN_BOX_W", "8"))     # px
-MIN_H = int(os.environ.get("MIN_BOX_H", "8"))     # px
-MAX_PER_CLASS = int(os.environ.get("MAX_PER_CLASS", "25"))  # กัน bias ต่อคลาส
-MAX_TOTAL     = int(os.environ.get("MAX_TOTAL", "50"))      # <= REK limit
-# ----------------------------------------
+# ---- Balance controls (ENV) ----
+ENABLE_BALANCE     = os.environ.get("ENABLE_BALANCE", "true").lower() == "true"
+PER_CLASS_CAP      = int(os.environ.get("PER_CLASS_CAP", "90"))   # ภาพ/คลาส สูงสุด
+MIN_CLASS_IMAGES   = int(os.environ.get("MIN_CLASS_IMAGES", "40")) # ตัดคลาสที่ภาพน้อยเกินไป
+MIN_BOX_PX         = int(os.environ.get("MIN_BOX_PX", "12"))        # ตัดกล่องเล็กจิ๋ว
+MAX_BOX_PER_IMAGE  = int(os.environ.get("MAX_BOX_PER_IMAGE", "50"))# กัน overflow Rekognition
+# -------------------------------
 
-# ---------- Optional Pillow ----------
-try:
-    from PIL import Image
-    from io import BytesIO
-    _PIL_OK = True
-except Exception:
-    _PIL_OK = False
-# ------------------------------------
-
-# ---------- helpers ----------
+# -------- helpers ----------
 def _put_jsonl(objs, key):
     buf = io.StringIO()
     for o in objs:
         buf.write(json.dumps(o, ensure_ascii=False) + "\n")
-    s3.put_object(
-        Bucket=BUCKET,
-        Key=key,
-        Body=buf.getvalue().encode("utf-8"),
-        ContentType="application/json"
-    )
+    s3.put_object(Bucket=BUCKET, Key=key, Body=buf.getvalue().encode("utf-8"),
+                ContentType="application/json")
 
 def _s3_exists(bucket, key):
     try:
@@ -58,17 +40,14 @@ def _s3_exists(bucket, key):
         return False
 
 def _list_keys(prefix):
-    cont = None
-    keys = []
+    cont=None; keys=[]
     while True:
-        kw = {"Bucket": BUCKET, "Prefix": prefix, "MaxKeys": 1000}
-        if cont:
-            kw["ContinuationToken"] = cont
-        r = s3.list_objects_v2(**kw)
-        keys += [it["Key"] for it in r.get("Contents", []) if not it["Key"].endswith("/")]
-        if not r.get("IsTruncated"):
-            break
-        cont = r.get("NextContinuationToken")
+        kw={"Bucket":BUCKET,"Prefix":prefix,"MaxKeys":1000}
+        if cont: kw["ContinuationToken"]=cont
+        r=s3.list_objects_v2(**kw)
+        keys += [it["Key"] for it in r.get("Contents",[]) if not it["Key"].endswith("/")]
+        if not r.get("IsTruncated"): break
+        cont=r.get("NextContinuationToken")
     return keys
 
 RF_RE = re.compile(r"\brf\.([a-f0-9]{6,})", re.IGNORECASE)
@@ -86,88 +65,106 @@ def _best_match(target: str, candidates):
     got = difflib.get_close_matches(target, candidates, n=1, cutoff=0.6)
     return got[0] if got else None
 
-def _get_image_size_true(bucket: str, key: str, fallback_wh):
-    """พยายามอ่านขนาดรูปจริงจาก S3; ถ้าอ่านไม่ได้ ให้คืนค่าจาก COCO"""
-    if not _PIL_OK:
-        return fallback_wh
-    try:
-        obj = s3.get_object(Bucket=bucket, Key=key)
-        with Image.open(BytesIO(obj["Body"].read())) as im:
-            w, h = im.size
-        return int(w), int(h)
-    except Exception:
-        return fallback_wh
-
 def _clip_box(x, y, w, h, W, H):
-    """บังคับ bbox ให้อยู่ในขอบภาพและเป็น int ทั้งหมด"""
     x = int(round(x)); y = int(round(y))
     w = int(round(w)); h = int(round(h))
-    if W <= 0 or H <= 0:
-        return 0, 0, 0, 0
+    if W <= 0 or H <= 0: return 0,0,0,0
     x = max(0, min(x, W - 1))
     y = max(0, min(y, H - 1))
     w = max(1, min(w, W - x))
     h = max(1, min(h, H - y))
     return x, y, w, h
-
-def _area(b):  # สำหรับเรียงเลือกรายการใหญ่ก่อน
-    return b["width"] * b["height"]
-# ----------------------------
+# ---------------------------
 
 def handler(event, context):
-    # 0) รอ READY (กัน manifest รันก่อนรูปพร้อม)
+    # 0) รอรูปให้พร้อม (READY + มีไฟล์จริง)
     for _ in range(12):  # ~60s
-        if _s3_exists(BUCKET, READY_KEY):
+        if _s3_exists(BUCKET, READY_KEY) and _list_keys(IMG_PREFIX):
             break
         time.sleep(5)
+    if not _s3_exists(BUCKET, READY_KEY):
+        return {"ok": False, "note": "images not ready (no READY flag)"}
 
-    # 1) โหลด COCO
-    coco_obj = s3.get_object(Bucket=BUCKET, Key=ANN_KEY)
-    coco = json.loads(coco_obj["Body"].read().decode("utf-8"))
-
-    # 2) index คีย์รูปที่มีอยู่จริงใน S3
     img_keys = _list_keys(IMG_PREFIX)
     if not img_keys:
         return {"ok": False, "note": "no preprocessed images found"}
 
-    by_hash = {}
-    by_name = {}
+    by_hash, by_name = {}, {}
     for k in img_keys:
         b = os.path.basename(k)
         by_name[b.lower()] = k
         h = _rf_hash(b)
-        if h:
-            by_hash[h] = k
+        if h: by_hash[h] = k
     name_set = set(by_name.keys())
 
-    # 3) เตรียม categories/annotations จาก COCO
-    img_map = {i["id"]: i for i in coco["images"]}
+    # 1) โหลด COCO
+    coco_obj = s3.get_object(Bucket=BUCKET, Key=ANN_KEY)
+    coco = json.loads(coco_obj["Body"].read().decode("utf-8"))
+    print(f"📘 loaded {ANN_KEY}: {len(coco.get('images',[]))} images, {len(coco.get('annotations',[]))} anns, {len(coco.get('categories',[]))} classes")
+
+    # 2) map image & category
+    imgs = {i["id"]: i for i in coco["images"]}
     cats = [c["name"] for c in coco["categories"]]
     class_to_id = {name: i for i, name in enumerate(cats)}
     id_to_name = {i: name for name, i in class_to_id.items()}
 
-    per_img = {i: [] for i in img_map.keys()}
+    # 3) รวม annotations ต่อภาพ + ตัดกล่องเล็ก + กัน overflow
+    anns_by_img = defaultdict(list)
     for a in coco.get("annotations", []):
+        # map category id → index ใน class list (กรณี COCO มี id กระโดด)
         cname = next(c["name"] for c in coco["categories"] if c["id"] == a["category_id"])
         cid = class_to_id[cname]
-        x, y, w, h = a["bbox"]
-        per_img[a["image_id"]].append({
-            "class_id": cid,
-            "left": x, "top": y, "width": w, "height": h
-        })
+        x,y,w,h = a["bbox"]
+        if w < MIN_BOX_PX or h < MIN_BOX_PX:
+            continue
+        anns_by_img[a["image_id"]].append({"class_id": cid, "left": x, "top": y, "width": w, "height": h})
 
-    # 4) ประกอบรายการ manifest
+    # 4) (option) balance: เลือกภาพแบบสมดุลรายคลาส
+    selected_img_ids = set(imgs.keys())
+    if ENABLE_BALANCE:
+        imgs_by_class = defaultdict(set)
+        for img_id, boxes in anns_by_img.items():
+            for bb in boxes:
+                imgs_by_class[bb["class_id"]].add(img_id)
+
+        # ตัดคลาสที่มีภาพน้อยกว่ากำหนด
+        valid_class_ids = {cid for cid, s in imgs_by_class.items() if len(s) >= MIN_CLASS_IMAGES}
+        if not valid_class_ids:
+            print("⚠️ no category passes MIN_CLASS_IMAGES; skip balance")
+        else:
+            # ทำ pool ต่อคลาส
+            pools = {cid: list(imgs_by_class[cid]) for cid in valid_class_ids}
+            for p in pools.values(): random.shuffle(p)
+            counts = {cid: 0 for cid in pools}
+            chosen = set()
+            active = True
+            while active:
+                active = False
+                for cid, pool in pools.items():
+                    if counts[cid] >= PER_CLASS_CAP: 
+                        continue
+                    while pool and pool[-1] in chosen:
+                        pool.pop()
+                    if pool:
+                        chosen.add(pool.pop())
+                        counts[cid] += 1
+                        active = True
+            selected_img_ids = chosen if chosen else selected_img_ids
+            print(f"🪄 balance: selected {len(selected_img_ids)} images with cap={PER_CLASS_CAP}, min_class_images={MIN_CLASS_IMAGES}")
+
+    # 5) ประกอบ manifest โดยแมตช์ชื่อไฟล์ 3 ชั้น (hash → normalize → fuzzy)
     items = []
     dropped = 0
     today = datetime.utcnow().isoformat(timespec="seconds") + "Z"
 
-    for img_id, anns in per_img.items():
-        meta = img_map[img_id]
+    for img_id in selected_img_ids:
+        if img_id not in imgs: 
+            continue
+        meta = imgs[img_id]
         rf_file = meta["file_name"]
-        w0 = int(meta.get("width", 0))
-        h0 = int(meta.get("height", 0))
+        w0 = int(meta.get("width", 0)); h0 = int(meta.get("height", 0))
 
-        # หา key จริงใน S3: rf-hash → normalize → fuzzy
+        # หา key จริงใน S3
         real_key = None
         hsh = _rf_hash(rf_file)
         if hsh and hsh in by_hash:
@@ -177,85 +174,44 @@ def handler(event, context):
             real_key = by_name.get(norm)
             if not real_key:
                 cand = _best_match(norm, name_set)
-                if cand:
-                    real_key = by_name[cand]
+                if cand: real_key = by_name[cand]
 
         if not real_key:
             dropped += 1
             print(f"⚠️ drop(no-key): {rf_file}")
             continue
 
-        # ขนาดรูปจริง (fallback ไป COCO ถ้าอ่านไม่ได้)
-        W, H = _get_image_size_true(BUCKET, real_key, (w0, h0))
-        if W <= 0 or H <= 0:
-            dropped += 1
-            print(f"⚠️ drop(bad-size): s3://{BUCKET}/{real_key} (COCO {w0}x{h0})")
-            continue
-
-        # แปลง/คลิป bbox
-        anns_int = []
-        for bb in anns:
-            x, y, w, h = _clip_box(bb["left"], bb["top"], bb["width"], bb["height"], W, H)
-            if w <= 0 or h <= 0:
-                continue
-            anns_int.append({
-                "class_id": int(bb["class_id"]),
-                "left": x, "top": y, "width": w, "height": h
-            })
-
-        if not anns_int:  # กัน NO_VALID_LABEL_ATTRIBUTES
+        # กล่องของภาพนี้
+        boxes = anns_by_img.get(img_id, [])
+        if not boxes:
             dropped += 1
             print(f"⚠️ drop(no-boxes): s3://{BUCKET}/{real_key}")
             continue
 
-        # ---------- ADAPTIVE TRIM ----------
-        orig_cnt = len(anns_int)
-        dropped_local = 0
-
-        # กรองบ็อกซ์จิ๋วเฉพาะเมื่อจำนวนรวมเกินลิมิต
-        if len(anns_int) > MAX_TOTAL:
-            before = len(anns_int)
-            anns_int = [b for b in anns_int if b["width"] >= MIN_W and b["height"] >= MIN_H]
-            dropped_local += before - len(anns_int)
-
-        # จำกัดต่อคลาส (เลือกอันใหญ่ก่อน)
-        if len(anns_int) > MAX_TOTAL:
-            by_cls = {}
-            for b in anns_int:
-                by_cls.setdefault(b["class_id"], []).append(b)
-            kept = []
-            for cid, boxes in by_cls.items():
-                boxes.sort(key=_area, reverse=True)
-                keep_c = boxes[:MAX_PER_CLASS]
-                dropped_local += max(0, len(boxes) - len(keep_c))
-                kept.extend(keep_c)
-            anns_int = kept
-
-        # จำกัดจำนวนรวม
-        if len(anns_int) > MAX_TOTAL:
-            anns_int.sort(key=_area, reverse=True)
-            dropped_local += len(anns_int) - MAX_TOTAL
-            anns_int = anns_int[:MAX_TOTAL]
-
-        if dropped_local > 0:
-            print(f"🧹 trim({rf_file}): {orig_cnt} → {len(anns_int)} "
-                  f"(dropped={dropped_local}, min={MIN_W}x{MIN_H}, "
-                  f"per_class≤{MAX_PER_CLASS}, total≤{MAX_TOTAL})")
-
-        if not anns_int:
+        # clip ให้อยู่ในขอบภาพ + กัน overflow 50 กล่อง
+        W, H = w0, h0
+        fixed = []
+        for bb in boxes:
+            x,y,w,h = _clip_box(bb["left"], bb["top"], bb["width"], bb["height"], W, H)
+            if w <= 0 or h <= 0: 
+                continue
+            fixed.append({"class_id": int(bb["class_id"]), "left": x, "top": y, "width": w, "height": h})
+        if not fixed:
             dropped += 1
-            print(f"⚠️ drop(after-trim-empty): s3://{BUCKET}/{real_key}")
+            print(f"⚠️ drop(no-valid-boxes): s3://{BUCKET}/{real_key}")
             continue
-        # ---------- /ADAPTIVE TRIM ----------
+
+        if len(fixed) > MAX_BOX_PER_IMAGE:
+            fixed = fixed[:MAX_BOX_PER_IMAGE]
 
         entry = {
             "source-ref": f"s3://{BUCKET}/{real_key}",
             LABEL_ATTR: {
-                "annotations": anns_int,
+                "annotations": fixed,
                 "image_size": [{"width": W, "height": H, "depth": 3}],
             },
             f"{LABEL_ATTR}-metadata": {
-                "objects": [{"confidence": 1} for _ in anns_int],
+                "objects": [{"confidence": 1} for _ in fixed],
                 "class-map": {str(i): id_to_name[i] for i in range(len(cats))},
                 "human-annotated": "yes",
                 "creation-date": today,
@@ -264,12 +220,12 @@ def handler(event, context):
             }
         }
         items.append(entry)
-        print(f"✅ {real_key}  boxes={len(anns_int)}  size={W}x{H}")
+        print(f"✅ {real_key}  boxes={len(fixed)}  size={W}x{H}")
 
     if not items:
-        return {"ok": False, "note": "no valid items after matching", "dropped": dropped}
+        return {"ok": False, "note": "no valid items after matching/balancing", "dropped": dropped}
 
-    # split & write
+    # 6) split & write
     random.shuffle(items)
     n_val = max(1, int(len(items) * VAL_SPLIT))
     val_items = items[:n_val]
@@ -278,27 +234,41 @@ def handler(event, context):
     _put_jsonl(train_items, f"{OUT_PREFIX}train.manifest")
     _put_jsonl(val_items,   f"{OUT_PREFIX}val.manifest")
 
+    # หลังได้ train_items / val_items
+    def count_per_class(items):
+        from collections import Counter
+        c = Counter()
+        for it in items:
+            for bb in it[LABEL_ATTR]["annotations"]:
+                c[ id_to_name[bb["class_id"]] ] += 1
+        return dict(c)
+
+    train_per_class = count_per_class(train_items)
+    val_per_class   = count_per_class(val_items)
+
     # labels helper
     labels_txt = "\n".join(cats) + "\n"
     s3.put_object(Bucket=BUCKET, Key=f"{OUT_PREFIX}labels.txt",
-                  Body=labels_txt.encode("utf-8"), ContentType="text/plain")
+                Body=labels_txt.encode("utf-8"), ContentType="text/plain")
     s3.put_object(Bucket=BUCKET, Key=f"{OUT_PREFIX}labels.json",
-                  Body=json.dumps(cats, ensure_ascii=False, indent=2).encode("utf-8"),
-                  ContentType="application/json")
+                Body=json.dumps(cats, ensure_ascii=False, indent=2).encode("utf-8"),
+                ContentType="application/json")
     print(f"🧾 classes ({len(cats)}): {', '.join(cats)}")
 
-    # optional: invoke validate
+    # 7) optional: invoke validate
     try:
         lambda_client = boto3.client("lambda")
-        VALIDATE_FN = os.environ.get("VALIDATE_FN", "validate-dataset")
+        VALIDATE_FN = os.environ.get("VALIDATE_FN", "validate_dataset")
         payload = {"bucket": BUCKET, "dataset": DATASET,
-                   "train": len(train_items), "val": len(val_items), "dropped": dropped}
+                "train": len(train_items), "val": len(val_items), 
+                "balanced": ENABLE_BALANCE, "dropped": dropped,
+                "train_per_class": train_per_class, "val_per_class": val_per_class}
         resp = lambda_client.invoke(FunctionName=VALIDATE_FN,
                                     InvocationType="Event",
                                     Payload=json.dumps(payload).encode("utf-8"))
         print(f"📤 invoked {VALIDATE_FN} status={resp.get('StatusCode')}")
     except Exception as e:
-        print("WARN: cannot invoke validate-dataset:", e)
+        print("WARN: cannot invoke validate_dataset:", e)
 
     return {"ok": True, "train": len(train_items), "val": len(val_items),
-            "dropped": dropped, "classes": cats}
+            "dropped": dropped, "classes": cats, "balanced": ENABLE_BALANCE}

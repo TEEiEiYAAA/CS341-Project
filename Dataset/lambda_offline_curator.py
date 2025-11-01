@@ -16,8 +16,8 @@ lambda_client = boto3.client("lambda")
 BUCKET = os.environ.get("BUCKET", "")  # ถ้าไม่ตั้ง จะใช้จาก event
 DATASET_ENV = os.environ.get("DATASET_NAME", "")
 PREPROCESS_FN = os.environ.get("PREPROCESS_FN", "preprocess-images")
-MANIFEST_FN = os.environ.get("MANIFEST_FN", "coco-to-rek-manifest")
-WAIT_PREPROC_READY_SECS = int(os.environ.get("WAIT_PREPROC_READY_SECS", "120"))
+MANIFEST_FN = os.environ.get("MANIFEST_FN", "coco_to_rek_manifest")
+WAIT_PREPROC_READY_SECS = int(os.environ.get("WAIT_PREPROC_READY_SECS", "600"))
 IMG_EXTS = [e.strip().lower() for e in os.environ.get("IMG_EXTS", ".jpg,.jpeg,.png").split(",")]
 
 # ---------- helpers ----------
