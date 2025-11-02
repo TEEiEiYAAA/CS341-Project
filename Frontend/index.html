@@ -17,7 +17,6 @@
     </div>
     <div class="sidebar-top">
       <a href="./index.html" class="nav-link active">Home</a>
-      <a href="./Html/Tutorial.html" class="nav-link">Tutorial</a>
       <a href="./Html/About.html" class="nav-link">About us</a>
     </div>
     <div class="sidebar-bottom">
@@ -32,8 +31,6 @@
     </header>
     <main>
       <div id="upload-form" class="card upload-card">
-        <p class="card-title">รหัสผู้ใช้</p>
-        <input id="userId" type="text" placeholder="เช่น U001" class="text-input" value="U001" />
 
         <p class="card-title">อัปโหลดผิวหน้า</p>
         <div class="file-upload-wrapper">
@@ -72,12 +69,13 @@
       <button id="confirm-clear-btn" class="modal-button clear-btn">Clear</button>
     </div>
   </div>
+  
   <script>
     const API_BASE = " https://wzs3lu83ng.execute-api.us-east-1.amazonaws.com"; // <- ใส่ URL ของ API Gateway
 
     document.getElementById("btnUpload").addEventListener("click", async () => {
       const status = document.getElementById("status");
-      const userId = document.getElementById("userId").value || "anonymous";
+      // const userId = document.getElementById("userId").value || "anonymous"; // <- ลบออก
       const file = document.getElementById("file").files[0];
       if (!file) {
         status.textContent = "กรุณาเลือกรูปก่อนอัปโหลด";
@@ -87,9 +85,14 @@
       try {
         status.textContent = "กำลังขอ Presigned URL...";
         const ext = file.name.split('.').pop().toLowerCase() || "jpg";
-        const pres = await fetch(`${API_BASE}/presign?userId=${encodeURIComponent(userId)}&ext=${ext}`);
+        
+        // --- แก้ไข ---
+        // ลบ userId ออกจาก query string
+        const pres = await fetch(`${API_BASE}/presign?ext=${ext}`);
+        // -------------
+
         if (!pres.ok) throw new Error("Presign request failed");
-        const data = await pres.json();
+        const data = await pres.json(); // data จะมี { key, userId, upload }
 
         const form = new FormData();
         Object.entries(data.upload.fields).forEach(([k, v]) => form.append(k, v));
@@ -99,7 +102,12 @@
         const resp = await fetch(data.upload.url, { method: "POST", body: form });
         if (!resp.ok) throw new Error("Upload failed: " + resp.status);
 
-        status.textContent = "✅ อัปโหลดสำเร็จ!";
+        // --- แก้ไข ---
+        // แสดง userId ที่ได้จาก Lambda
+        const generatedUserId = data.userId || "N/A";
+        status.innerHTML = `✅ อัปโหลดสำเร็จ!<br><b>รหัสของคุณคือ: ${generatedUserId}</b>`;
+        // -------------
+
       } catch (err) {
         status.textContent = "❌ เกิดข้อผิดพลาด: " + err.message;
       }
