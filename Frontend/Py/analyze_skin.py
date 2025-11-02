@@ -1,73 +1,77 @@
 import os
 import json
+import base64
 import logging
+import urllib.request
+import urllib.parse
 import boto3
-from urllib.parse import unquote_plus
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 rekognition = boto3.client("rekognition")
-s3 = boto3.client("s3")
+s3          = boto3.client("s3")
 
-PROJECT_VERSION_ARN = os.environ["PROJECT_VERSION_ARN"]
-OUTPUT_BUCKET = os.environ.get("OUTPUT_BUCKET", "").strip()
-MIN_CONFIDENCE = float(os.environ.get("MIN_CONFIDENCE", "50"))
+MODEL_ARN      = os.environ["MODEL_ARN"]
+RESULT_BUCKET  = os.environ["RESULT_BUCKET"]
+MIN_CONFIDENCE = float(os.environ.get("MIN_CONFIDENCE", "70"))
 
-def _build_result_key(src_key: str) -> str:
-    clean_key = src_key.lstrip("/")
-    if not clean_key.startswith("uploads/"):
-        clean_key = f"uploads/{clean_key}"
-    return f"{clean_key.replace('uploads/', 'results/', 1)}.json"
-
-def _parse_user_id_from_key(src_key: str) -> str | None:
-    parts = src_key.split("/")
-    for p in parts:
-        if p.startswith("user="):
-            return p.split("=", 1)[1]
-    return None
+def _resp(status, body):
+    return {
+        "statusCode": status,
+        "headers": {"content-type": "application/json"},
+        "body": json.dumps(body, ensure_ascii=False),
+    }
 
 def handler(event, context):
-    logger.info("📥 Event: %s", json.dumps(event, ensure_ascii=False))
+    try:
+        body = event.get("body")
+        if event.get("isBase64Encoded"):
+            body = base64.b64decode(body or "").decode("utf-8")
+        data = json.loads(body or "{}")
 
-    for rec in event.get("Records", []):
-        bucket = rec["s3"]["bucket"]["name"]
-        key = unquote_plus(rec["s3"]["object"]["key"])
-        out_bucket = OUTPUT_BUCKET or bucket
-        out_key = _build_result_key(key)
-        user_id = _parse_user_id_from_key(key)
+        image_url       = data["image_url"]          # presigned GET url
+        session_id      = data.get("sessionId")
+        user_skin_types = data.get("skinTypes")      # ส่งมาเป็น "Oily,Sensitive" ได้
+        src_bucket      = data.get("source_bucket")  # optional
+        src_key         = data.get("source_key")     # optional
 
-        logger.info(f"🖼️ Analyze s3://{bucket}/{key}")
+        # ดาวน์โหลดรูปจาก presigned URL
+        with urllib.request.urlopen(image_url, timeout=15) as r:
+            img_bytes = r.read()
 
-        try:
-            response = rekognition.detect_custom_labels(
-                ProjectVersionArn=PROJECT_VERSION_ARN,
-                Image={"S3Object": {"Bucket": bucket, "Name": key}},
-                MinConfidence=MIN_CONFIDENCE
-            )
-        except Exception as e:
-            logger.exception("❌ Rekognition error")
-            _put_json(out_bucket, out_key, {"error": str(e)})
-            continue
+        # วิเคราะห์ด้วยโมเดลใน Account B
+        resp = rekognition.detect_custom_labels(
+            ProjectVersionArn=MODEL_ARN,
+            Image={"Bytes": img_bytes},
+            MinConfidence=MIN_CONFIDENCE
+        )
+        labels = sorted({lbl["Name"] for lbl in resp.get("CustomLabels", [])})
 
-        # ดึงเฉพาะชื่อ label และกรองซ้ำ
-        labels = sorted(list({lbl["Name"] for lbl in response.get("CustomLabels", [])}))
+        # สร้าง result key
+        if src_key:
+            out_key = src_key.replace("uploads/", "results/", 1) + ".json"
+        else:
+            # กรณีไม่มี source_key ให้ fallback ชื่อจาก URL
+            filename = os.path.basename(urllib.parse.urlparse(image_url).path) or "image"
+            out_key = f"results/{filename}.json"
 
         result = {
-            "source": {"bucket": bucket, "key": key},
-            "userId": user_id,
-            "labels": labels
+            "source": {"bucket": src_bucket, "key": src_key, "via": "presigned_url"},
+            "sessionId": session_id,
+            "user_skin_types": user_skin_types,
+            "labels": list(labels)
         }
 
-        _put_json(out_bucket, out_key, result)
-        logger.info(f"✅ Saved to s3://{out_bucket}/{out_key}")
+        s3.put_object(
+            Bucket=RESULT_BUCKET,
+            Key=out_key,
+            Body=json.dumps(result, ensure_ascii=False, indent=2),
+            ContentType="application/json"
+        )
+        logger.info(f"Saved result to s3://{RESULT_BUCKET}/{out_key}")
+        return _resp(200, {"ok": True, "result_key": out_key})
 
-    return {"statusCode": 200, "body": "ok"}
-
-def _put_json(bucket: str, key: str, data: dict):
-    s3.put_object(
-        Bucket=bucket,
-        Key=key,
-        Body=json.dumps(data, ensure_ascii=False, indent=2),
-        ContentType="application/json"
-    )
+    except Exception as e:
+        logger.exception("Error")
+        return _resp(500, {"error": str(e)})
