@@ -86,9 +86,16 @@ def handler(event, context):
         presigned = s3.generate_presigned_post(
             Bucket=bucket,
             Key=key,
-            Fields={"Content-Type": ctype},
-            Conditions=[["content-length-range", 0, max_size], {"Content-Type": ctype}],
-            ExpiresIn=300,
+            Fields={
+              "Content-Type": ctype,
+              "acl": "public-read"  # <-- 1. เพิ่ม Field นี้
+          },
+          Conditions=[
+              ["content-length-range", 0, max_size], 
+              {"Content-Type": ctype},
+              {"acl": "public-read"}   # <-- 2. เพิ่ม Condition นี้
+          ],
+          ExpiresIn=300,
         )
 
         logger.info(f"✅ Presigned URL generated successfully for {key}")
