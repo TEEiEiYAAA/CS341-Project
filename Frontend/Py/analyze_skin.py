@@ -14,7 +14,7 @@ s3          = boto3.client("s3")
 
 MODEL_ARN      = os.environ["MODEL_ARN"]
 RESULT_BUCKET  = os.environ["RESULT_BUCKET"]
-MIN_CONFIDENCE = float(os.environ.get("MIN_CONFIDENCE", "70"))
+MIN_CONFIDENCE = float(os.environ.get("MIN_CONFIDENCE", "50"))
 
 def _resp(status, body):
     return {
@@ -31,8 +31,6 @@ def handler(event, context):
         data = json.loads(body or "{}")
 
         image_url       = data["image_url"]          # presigned GET url
-        session_id      = data.get("sessionId")
-        user_skin_types = data.get("skinTypes")      # ส่งมาเป็น "Oily,Sensitive" ได้
         src_bucket      = data.get("source_bucket")  # optional
         src_key         = data.get("source_key")     # optional
 
@@ -58,8 +56,6 @@ def handler(event, context):
 
         result = {
             "source": {"bucket": src_bucket, "key": src_key, "via": "presigned_url"},
-            "sessionId": session_id,
-            "user_skin_types": user_skin_types,
             "labels": list(labels)
         }
 
