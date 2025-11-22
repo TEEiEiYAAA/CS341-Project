@@ -1,44 +1,39 @@
-import os
-import json
-import base64
-import logging
-import urllib.request
-import urllib.parse
-import boto3
+# analyze_skin_s3.py  (runtime: Python 3.13)
+import os, json, logging, boto3
+from urllib.parse import unquote_plus
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 rekognition = boto3.client("rekognition")
-s3          = boto3.client("s3")
+s3 = boto3.client("s3")
 
 MODEL_ARN      = os.environ["MODEL_ARN"]
-RESULT_BUCKET  = os.environ["RESULT_BUCKET"]
-MIN_CONFIDENCE = float(os.environ.get("MIN_CONFIDENCE", "50"))
-
-def _resp(status, body):
-    return {
-        "statusCode": status,
-        "headers": {"content-type": "application/json"},
-        "body": json.dumps(body, ensure_ascii=False),
-    }
+RESULT_BUCKET  = os.environ["RESULT_BUCKET"]           # = บัคเก็ตเดียวกับที่เก็บรูปก็ได้
+RESULT_PREFIX  = os.environ.get("RESULT_PREFIX","results/")
+MIN_CONFIDENCE = float(os.environ.get("MIN_CONFIDENCE","50"))
 
 def handler(event, context):
-    try:
-        body = event.get("body")
-        if event.get("isBase64Encoded"):
-            body = base64.b64decode(body or "").decode("utf-8")
-        data = json.loads(body or "{}")
+    for rec in event.get("Records", []):
+        bucket = rec["s3"]["bucket"]["name"]
+        key    = unquote_plus(rec["s3"]["object"]["key"])
 
-        image_url       = data["image_url"]          # presigned GET url
-        src_bucket      = data.get("source_bucket")  # optional
-        src_key         = data.get("source_key")     # optional
+        # อ่าน metadata (ถ้ามี)
+        session_id = None
+        user_skin_types = None
+        try:
+            head = s3.head_object(Bucket=bucket, Key=key)
+            md = head.get("Metadata", {})
+            session_id = md.get("sessionid")
+            user_skin_types = md.get("skintypes")
+        except Exception:
+            pass
 
-        # ดาวน์โหลดรูปจาก presigned URL
-        with urllib.request.urlopen(image_url, timeout=15) as r:
-            img_bytes = r.read()
+        # อ่านไฟล์ภาพจาก S3 → bytes
+        obj = s3.get_object(Bucket=bucket, Key=key)
+        img_bytes = obj["Body"].read()
 
-        # วิเคราะห์ด้วยโมเดลใน Account B
+        # วิเคราะห์ด้วยโมเดล
         resp = rekognition.detect_custom_labels(
             ProjectVersionArn=MODEL_ARN,
             Image={"Bytes": img_bytes},
@@ -46,28 +41,24 @@ def handler(event, context):
         )
         labels = sorted({lbl["Name"] for lbl in resp.get("CustomLabels", [])})
 
-        # สร้าง result key
-        if src_key:
-            out_key = src_key.replace("uploads/", "results/", 1) + ".json"
+        # กำหนด key สำหรับผลลัพธ์
+        # แทนที่ "uploads/" → "results/" แล้วเติม .json
+        if key.startswith("uploads/"):
+            out_key = key.replace("uploads/", RESULT_PREFIX, 1) + ".json"
         else:
-            # กรณีไม่มี source_key ให้ fallback ชื่อจาก URL
-            filename = os.path.basename(urllib.parse.urlparse(image_url).path) or "image"
-            out_key = f"results/{filename}.json"
+            out_key = f"{RESULT_PREFIX}{key}.json"
 
         result = {
-            "source": {"bucket": src_bucket, "key": src_key, "via": "presigned_url"},
-            "labels": list(labels)
+            "source": {"bucket": bucket, "key": key, "via": "s3_event"},
+            "labels": labels,
+            #"meta": {"sessionId": session_id, "skinTypes": user_skin_types}
         }
 
         s3.put_object(
             Bucket=RESULT_BUCKET,
             Key=out_key,
-            Body=json.dumps(result, ensure_ascii=False, indent=2),
+            Body=json.dumps(result, ensure_ascii=False, indent=2).encode("utf-8"),
             ContentType="application/json"
         )
-        logger.info(f"Saved result to s3://{RESULT_BUCKET}/{out_key}")
-        return _resp(200, {"ok": True, "result_key": out_key})
-
-    except Exception as e:
-        logger.exception("Error")
-        return _resp(500, {"error": str(e)})
+        logger.info(f"Saved: s3://{RESULT_BUCKET}/{out_key}")
+    return {"ok": True}
