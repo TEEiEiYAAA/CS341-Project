@@ -1,151 +1,193 @@
-document.addEventListener('DOMContentLoaded', () => {
-  // --- DOM Elements (เหมือนเดิม) ---
-  const hamburgerMenu = document.getElementById('hamburger-menu');
-  const closeMenu = document.getElementById('close-menu');
-  const sidebar = document.querySelector('.sidebar');
-  const uploadBtn = document.getElementById('upload-btn');
-  const fileInput = document.getElementById('file-input');
-  const fileNameText = document.getElementById('file-name-text');
-  const removeFileBtn = document.getElementById('remove-file-btn');
-  const uploadForm = document.getElementById('upload-form');
-  const resultMessage = document.getElementById('result-message');
-  const modalOverlay = document.getElementById('modal-overlay');
-  const confirmModal = document.getElementById('confirm-modal');
-  const errorModal = document.getElementById('error-modal');
-  const closeConfirmModalBtn = document.getElementById('close-confirm-modal-btn');
-  const confirmClearBtn = document.getElementById('confirm-clear-btn');
-  const errorClearBtn = document.getElementById('error-clear-btn');
+    // --------------------------------------------------------
+    // PART 1: UI LOGIC (การทำงานของปุ่ม, เมนู, เลือกไฟล์)
+    // --------------------------------------------------------
+    document.addEventListener('DOMContentLoaded', () => {
+      // Element References
+      const hamburgerMenu = document.getElementById('hamburger-menu');
+      const closeMenu = document.getElementById('close-menu');
+      const sidebar = document.querySelector('.sidebar');
+      const fileInput = document.getElementById('file');
+      const fileNameText = document.getElementById('file-name-text');
+      const removeFileBtn = document.getElementById('remove-file-btn');
+      const processBtn = document.getElementById('btnUpload');
+      
+      // Modals
+      const wrongTypeModal = document.getElementById('wrong-type-modal');
+      const confirmClearModal = document.getElementById('confirm-clear-modal');
+      const wrongTypeClearBtn = document.getElementById('wrong-type-clear-btn');
+      const confirmClearBtn = document.getElementById('confirm-clear-btn');
+      const closeConfirmModalBtn = document.getElementById('close-confirm-modal-btn');
+      
+      const allowedTypes = ['image/jpeg', 'image/png'];
 
-  // 🔧 ใส่ URL ของ API Gateway (ที่ชี้ Lambda presigner)
-  const API_ENDPOINT = 'https://6w4jivfjnf.execute-api.us-east-1.amazonaws.com';
-
-  let isInteractionBlocked = false;
-
-  // --- Sidebar / Modal เดิม ---
-  const toggleSidebar = () => { if (!isInteractionBlocked) sidebar.classList.toggle('open'); };
-  if (hamburgerMenu) hamburgerMenu.addEventListener('click', toggleSidebar);
-  if (closeMenu) closeMenu.addEventListener('click', toggleSidebar);
-  const showModal = (modal) => { modalOverlay.classList.remove('hidden'); modal.classList.remove('hidden'); };
-  const hideAllModals = () => { if (isInteractionBlocked) return; modalOverlay.classList.add('hidden'); confirmModal.classList.add('hidden'); errorModal.classList.add('hidden'); };
-  const resetFileInput = () => { fileInput.value = ''; fileNameText.textContent = '<No File Chosen...>'; fileNameText.style.color = '#888'; removeFileBtn.classList.add('hidden'); };
-  uploadBtn.addEventListener('click', () => { if (isInteractionBlocked) return; fileInput.click(); });
-  removeFileBtn.addEventListener('click', () => { if (isInteractionBlocked) return; showModal(confirmModal); });
-  closeConfirmModalBtn.addEventListener('click', hideAllModals);
-  modalOverlay.addEventListener('click', hideAllModals);
-  confirmClearBtn.addEventListener('click', () => { resetFileInput(); hideAllModals(); });
-  errorClearBtn.addEventListener('click', () => { isInteractionBlocked = false; hideAllModals(); resetFileInput(); });
-
-  fileInput.addEventListener('change', () => {
-    if (fileInput.files.length > 0) {
-      const file = fileInput.files[0];
-      if (file.type.startsWith('image/')) {
-        fileNameText.textContent = file.name;
-        fileNameText.style.color = 'var(--text-color)';
-        removeFileBtn.classList.remove('hidden');
-      } else {
-        resetFileInput();
-        showModal(errorModal);
-        isInteractionBlocked = true;
+      // Sidebar Logic
+      if (hamburgerMenu && sidebar) {
+        hamburgerMenu.addEventListener('click', () => sidebar.classList.add('open'));
       }
-    } else {
-      resetFileInput();
-    }
-  });
+      if (closeMenu && sidebar) {
+        closeMenu.addEventListener('click', () => sidebar.classList.remove('open'));
+      }
 
-  // --- ส่งฟอร์ม ---
-  uploadForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    if (isInteractionBlocked) return;
+      // Function Reset ค่าต่างๆ (ใช้ตอนกดลบไฟล์ หรือตอนอัปโหลดผิด)
+      window.resetFileInput = () => { // ประกาศเป็น window เพื่อให้เรียกใช้ได้ทั่ว
+        fileInput.value = '';
+        fileNameText.textContent = '<No File Chosen...>';
+        fileNameText.classList.remove('selected');
+        removeFileBtn.classList.add('hidden');
+        processBtn.disabled = true;
+        document.getElementById('status').textContent = '';
+        
+        // ซ่อนผลลัพธ์และสินค้าเมื่อเคลียร์ไฟล์ (Reset กลับไปเป็นกล่องเปล่า)
+        document.getElementById('analysis-container').classList.add('hidden');
+        document.getElementById('product-container').classList.add('hidden');
+      };
 
-    const selectedFile = fileInput.files[0];
+      // File Input Change Logic
+      if (fileInput) {
+        fileInput.addEventListener('change', () => {
+          const file = fileInput.files[0];
+          if (file) {
+            if (allowedTypes.includes(file.type)) {
+              fileNameText.textContent = file.name;
+              fileNameText.classList.add('selected');
+              removeFileBtn.classList.remove('hidden');
+              processBtn.disabled = false;
+            } else {
+              window.resetFileInput();
+              wrongTypeModal.classList.remove('hidden');
+            }
+          } else {
+            window.resetFileInput();
+          }
+        });
+      }
 
-    // 1) เก็บค่าจาก checkbox
-    const selectedCheckboxes = document.querySelectorAll('input[name="skin-type"]:checked');
-    const selectedSkinTypes = Array.from(selectedCheckboxes).map(cb => cb.value); // ["ผิวมัน", "ผิวแพ้ง่าย"]
-    const skinTypesString = selectedSkinTypes.join(',');
-
-    // Validation
-    if (!selectedFile) {
-      resultMessage.textContent = 'กรุณาอัปโหลดรูปภาพก่อน';
-      resultMessage.style.color = 'red';
-      return;
-    }
-    if (!skinTypesString) {
-      resultMessage.textContent = 'กรุณาเลือกสภาพผิวอย่างน้อย 1 ข้อ';
-      resultMessage.style.color = 'red';
-      return;
-    }
-    if (API_ENDPOINT === 'YOUR_API_GATEWAY_URL_HERE') {
-      resultMessage.textContent = 'Error: ยังไม่ได้ตั้งค่า API Gateway URL';
-      resultMessage.style.color = 'red';
-      return;
-    }
-
-    resultMessage.textContent = 'กำลังเตรียมการอัปโหลด...';
-    resultMessage.style.color = 'var(--text-color)';
-
-    try {
-      // 2) สร้าง/จำ sessionId
-      const sessionId = localStorage.getItem('sessionId') || crypto.randomUUID();
-      localStorage.setItem('sessionId', sessionId);
-
-      const ext = (selectedFile.name.split('.').pop() || 'jpg').toLowerCase();
-
-      // 3) ขอ Presigned URL (POST) พร้อมส่ง sessionId + skinTypes
-      const presResp = await fetch(API_ENDPOINT, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fileName: selectedFile.name,
-          fileType: selectedFile.type,
-          sessionId,
-          skinTypes: skinTypesString
-        })
+      // Modal Button Listeners
+      if (removeFileBtn) removeFileBtn.addEventListener('click', () => confirmClearModal.classList.remove('hidden'));
+      if (wrongTypeClearBtn) wrongTypeClearBtn.addEventListener('click', () => wrongTypeModal.classList.add('hidden'));
+      if (confirmClearBtn) confirmClearBtn.addEventListener('click', () => {
+        window.resetFileInput();
+        confirmClearModal.classList.add('hidden');
       });
-      if (!presResp.ok) {
-        const err = await presResp.text();
-        throw new Error(`Cannot get upload URL: ${err || presResp.statusText}`);
+      if (closeConfirmModalBtn) closeConfirmModalBtn.addEventListener('click', () => confirmClearModal.classList.add('hidden'));
+    });
+
+    // --------------------------------------------------------
+    // PART 2: API & PROCESSING LOGIC (การอัปโหลดและแสดงผล)
+    // --------------------------------------------------------
+    const API_BASE = "https://6w4jivfjnf.execute-api.us-east-1.amazonaws.com"; 
+
+    document.getElementById("btnUpload").addEventListener("click", async () => {
+      const status = document.getElementById("status");
+      const file = document.getElementById("file").files[0];
+      
+      if (!file) {
+        status.textContent = "กรุณาเลือกรูปก่อนอัปโหลด";
+        return;
       }
 
-      // presigner ควรคืน { uploadURL, key, bucket, requiredHeaders }
-      const { uploadURL, key, bucket, requiredHeaders } = await presResp.json();
+      try {
+        status.textContent = "กำลังประมวลผล...";
+        
+        // 1. ขอ Presigned URL (API เดิมของคุณ)
+        const ext = file.name.split('.').pop().toLowerCase() || "jpg";
+        const pres = await fetch(`${API_BASE}/presign?ext=${ext}`);
+        if (!pres.ok) throw new Error("Presign request failed");
+        const data = await pres.json();
 
-      resultMessage.textContent = 'กำลังอัปโหลดไฟล์...';
+        // 2. อัปโหลดรูปไป S3 (API เดิมของคุณ)
+        const form = new FormData();
+        Object.entries(data.upload.fields).forEach(([k, v]) => form.append(k, v));
+        form.append("file", file);
+        const resp = await fetch(data.upload.url, { method: "POST", body: form });
+        if (!resp.ok) throw new Error("Upload failed: " + resp.status);
 
-      // 4) อัปโหลดด้วย presigned PUT + header meta (ต้องตรงกับที่เซ็นมา)
-      const putHeaders = new Headers({ 'Content-Type': selectedFile.type });
-      if (requiredHeaders) {
-        Object.entries(requiredHeaders).forEach(([k, v]) => putHeaders.set(k, v));
+        status.innerHTML = `✅ ประมวลผลสำเร็จ!`;
+
+        // ---------------------------------------------------------
+        // 3. จัดการข้อมูล JSON (ส่วนที่เพิ่มใหม่)
+        // จำลองข้อมูล JSON ที่ได้รับกลับมา (ตามรูปตัวอย่างของคุณ)
+        // *หมายเหตุ: ในอนาคตคุณต้อง Fetch json นี้มาจาก DynamoDB หรือ API
+        // ---------------------------------------------------------
+        const mockJsonResponse = {
+            "user_info": { 
+                "bucket": "dermadataaa",
+                "key": data.upload.fields.key // ใช้ Key จริงจากการอัปโหลด
+            },
+            "analysis_labels": [
+                "Acne",
+                "Enlarged-Pores"
+            ],
+            "recommendations": [
+                {
+                    "problem": "Acne",
+                    "name": "the perfecting treatment",
+                    "brand": "la mer",
+                    "price": 8942.5,
+                    "image_url": "https://i0.wp.com/mydbale.com/wp-content/uploads/2022/03/Artboard-1-copy-17-1.jpg", 
+                    "ingredients": "water | dimethicone | isododecane | algae (seaweed) extract"
+                },
+                {
+                     "problem": "Enlarged-Pores",
+                     "name": "Pore Minimizing Serum",
+                     "brand": "Clarins",
+                     "price": 2500,
+                     "image_url": "https://via.placeholder.com/150", 
+                     "ingredients": "Aqua | Glycerin | Silica"
+                }
+            ]
+        };
+
+        // เรียกฟังก์ชันวาด UI
+        renderUI(mockJsonResponse);
+
+      } catch (err) {
+        status.textContent = "❌ เกิดข้อผิดพลาด: " + err.message;
+        console.error(err);
       }
-      const uploadRes = await fetch(uploadURL, { method: 'PUT', headers: putHeaders, body: selectedFile });
-      if (!uploadRes.ok) throw new Error('File upload failed.');
+    });
 
-      resultMessage.textContent = '✅ อัปโหลดสำเร็จ! กำลังรอผลวิเคราะห์...';
+    // --- ฟังก์ชันสำหรับวาด UI จาก JSON (Helper Function) ---
+    function renderUI(data) {
+        // A. ส่วนผลลัพธ์ (Analysis)
+        const analysisContainer = document.getElementById('analysis-container');
+        const analysisText = document.getElementById('analysis-text');
+        
+        // แปลง Array labels เป็นข้อความคั่นด้วย comma
+        const labels = data.analysis_labels.join(', '); 
+        analysisText.innerHTML = `“ตรวจพบปัญหา: <b>${labels}</b> <br>ผิวหน้าของท่านต้องการการดูแลเป็นพิเศษในจุดเหล่านี้...”`;
+        
+        analysisContainer.classList.remove('hidden'); // ลบ class hidden เพื่อโชว์เนื้อหา
 
-      // 5) สร้าง URL ผลลัพธ์ แล้วลองดึงหลัง 5 วิ
-      const resultsKey = key.replace('uploads/', 'results/') + '.json';
-      const s3Host = new URL(uploadURL).host; // <bucket>.s3.<region>.amazonaws.com
-      const resultUrl = `https://${s3Host}/${resultsKey}`;
+        // B. ส่วนสินค้าแนะนำ (Products)
+        const productContainer = document.getElementById('product-container');
+        const productList = document.getElementById('product-list');
+        productList.innerHTML = ''; // เคลียร์ของเก่า (ถ้ามี)
 
-      setTimeout(async () => {
-        try {
-          const res = await fetch(resultUrl);
-          if (!res.ok) { resultMessage.textContent = 'ยังไม่มีผลลัพธ์ โปรดลองอีกสักครู่'; return; }
-          const data = await res.json();
-          const labels = Array.isArray(data.labels) ? data.labels.join(', ') : '-';
-          const userSkin = data.user_skin_types || skinTypesString || '-';
-          resultMessage.innerHTML = `
-            <b>สภาพผิวที่ผู้ใช้เลือก:</b> ${userSkin}<br/>
-            <b>ผลจากโมเดล:</b> ${labels}
-          `;
-        } catch (err) {
-          resultMessage.textContent = `ดึงผลล้มเหลว: ${err.message}`;
-        }
-      }, 5000);
+        data.recommendations.forEach(item => {
+            // แปลง ingredients ที่คั่นด้วย | ให้เป็น <option> ใน Dropdown
+            const ingredientOptions = item.ingredients.split('|').map(ing => `<option>${ing.trim()}</option>`).join('');
 
-    } catch (error) {
-      resultMessage.textContent = `Error: ${error.message}`;
-      resultMessage.style.color = 'red';
+            // สร้าง HTML การ์ดสินค้า
+            const cardHTML = `
+            <div class="product-item">
+                <img src="${item.image_url}" alt="${item.name}" class="product-img">
+                <div class="product-info">
+                    <div class="product-header">
+                        <span class="product-name">${item.brand} - ${item.name}</span>
+                        <span class="product-price">ราคา: ${item.price.toLocaleString()} บาท</span>
+                    </div>
+                    <div class="product-problem-tag">สำหรับ: ${item.problem}</div>
+                    
+                    <select class="product-select">
+                        <option selected disabled>ดูส่วนผสม (Ingredients)</option>
+                        ${ingredientOptions}
+                    </select>
+                </div>
+            </div>
+            `;
+            productList.innerHTML += cardHTML;
+        });
+
+        productContainer.classList.remove('hidden'); // ลบ class hidden เพื่อโชว์เนื้อหา
     }
-  });
-});
