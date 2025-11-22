@@ -17,7 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const errorClearBtn = document.getElementById('error-clear-btn');
 
   // 🔧 ใส่ URL ของ API Gateway (ที่ชี้ Lambda presigner)
-  const API_ENDPOINT = 'https://wzs3lu83ng.execute-api.us-east-1.amazonaws.com/presign';
+  const API_ENDPOINT = 'https://6w4jivfjnf.execute-api.us-east-1.amazonaws.com';
 
   let isInteractionBlocked = false;
 
