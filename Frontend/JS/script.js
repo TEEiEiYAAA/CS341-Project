@@ -1,193 +1,175 @@
-    // --------------------------------------------------------
-    // PART 1: UI LOGIC (การทำงานของปุ่ม, เมนู, เลือกไฟล์)
-    // --------------------------------------------------------
-    document.addEventListener('DOMContentLoaded', () => {
-      // Element References
-      const hamburgerMenu = document.getElementById('hamburger-menu');
-      const closeMenu = document.getElementById('close-menu');
-      const sidebar = document.querySelector('.sidebar');
-      const fileInput = document.getElementById('file');
-      const fileNameText = document.getElementById('file-name-text');
-      const removeFileBtn = document.getElementById('remove-file-btn');
-      const processBtn = document.getElementById('btnUpload');
-      
-      // Modals
-      const wrongTypeModal = document.getElementById('wrong-type-modal');
-      const confirmClearModal = document.getElementById('confirm-clear-modal');
-      const wrongTypeClearBtn = document.getElementById('wrong-type-clear-btn');
-      const confirmClearBtn = document.getElementById('confirm-clear-btn');
-      const closeConfirmModalBtn = document.getElementById('close-confirm-modal-btn');
-      
-      const allowedTypes = ['image/jpeg', 'image/png'];
+document.addEventListener('DOMContentLoaded', () => {
+    // ============================================================
+    // 1. ส่วนจัดการ UI (ปุ่ม, เมนู, เลือกไฟล์) - ไม่ต้องแก้
+    // ============================================================
+    const hamburgerMenu = document.getElementById('hamburger-menu');
+    const closeMenu = document.getElementById('close-menu');
+    const sidebar = document.querySelector('.sidebar');
+    const fileInput = document.getElementById('file');
+    const fileNameText = document.getElementById('file-name-text');
+    const removeFileBtn = document.getElementById('remove-file-btn');
+    const processBtn = document.getElementById('btnUpload'); // ปุ่มประมวลผล
+    const statusDisplay = document.getElementById('status');   // ที่แสดงข้อความสถานะ
 
-      // Sidebar Logic
-      if (hamburgerMenu && sidebar) {
+    // Modals
+    const wrongTypeModal = document.getElementById('wrong-type-modal');
+    const confirmClearModal = document.getElementById('confirm-clear-modal');
+    const wrongTypeClearBtn = document.getElementById('wrong-type-clear-btn');
+    const confirmClearBtn = document.getElementById('confirm-clear-btn');
+    const closeConfirmModalBtn = document.getElementById('close-confirm-modal-btn');
+
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg'];
+
+    // Sidebar Logic
+    if (hamburgerMenu && sidebar) {
         hamburgerMenu.addEventListener('click', () => sidebar.classList.add('open'));
-      }
-      if (closeMenu && sidebar) {
+    }
+    if (closeMenu && sidebar) {
         closeMenu.addEventListener('click', () => sidebar.classList.remove('open'));
-      }
+    }
 
-      // Function Reset ค่าต่างๆ (ใช้ตอนกดลบไฟล์ หรือตอนอัปโหลดผิด)
-      window.resetFileInput = () => { // ประกาศเป็น window เพื่อให้เรียกใช้ได้ทั่ว
+    // Reset Function
+    const resetUI = () => {
         fileInput.value = '';
         fileNameText.textContent = '<No File Chosen...>';
         fileNameText.classList.remove('selected');
         removeFileBtn.classList.add('hidden');
         processBtn.disabled = true;
-        document.getElementById('status').textContent = '';
+        statusDisplay.textContent = '';
         
-        // ซ่อนผลลัพธ์และสินค้าเมื่อเคลียร์ไฟล์ (Reset กลับไปเป็นกล่องเปล่า)
-        document.getElementById('analysis-container').classList.add('hidden');
-        document.getElementById('product-container').classList.add('hidden');
-      };
+        // ซ่อนผลลัพธ์
+        const ac = document.getElementById('analysis-container');
+        const pc = document.getElementById('product-container');
+        if (ac) ac.classList.add('hidden');
+        if (pc) pc.classList.add('hidden');
+    };
 
-      // File Input Change Logic
-      if (fileInput) {
+    // File Input Logic
+    if (fileInput) {
         fileInput.addEventListener('change', () => {
-          const file = fileInput.files[0];
-          if (file) {
-            if (allowedTypes.includes(file.type)) {
-              fileNameText.textContent = file.name;
-              fileNameText.classList.add('selected');
-              removeFileBtn.classList.remove('hidden');
-              processBtn.disabled = false;
+            const file = fileInput.files[0];
+            if (file) {
+                if (allowedTypes.includes(file.type)) {
+                    fileNameText.textContent = file.name;
+                    fileNameText.classList.add('selected');
+                    removeFileBtn.classList.remove('hidden');
+                    processBtn.disabled = false; // ปลดล็อคปุ่ม
+                } else {
+                    resetUI();
+                    wrongTypeModal.classList.remove('hidden');
+                }
             } else {
-              window.resetFileInput();
-              wrongTypeModal.classList.remove('hidden');
+                resetUI();
             }
-          } else {
-            window.resetFileInput();
-          }
         });
-      }
+    }
 
-      // Modal Button Listeners
-      if (removeFileBtn) removeFileBtn.addEventListener('click', () => confirmClearModal.classList.remove('hidden'));
-      if (wrongTypeClearBtn) wrongTypeClearBtn.addEventListener('click', () => wrongTypeModal.classList.add('hidden'));
-      if (confirmClearBtn) confirmClearBtn.addEventListener('click', () => {
-        window.resetFileInput();
+    // Modal Listeners
+    if (removeFileBtn) removeFileBtn.addEventListener('click', () => confirmClearModal.classList.remove('hidden'));
+    if (wrongTypeClearBtn) wrongTypeClearBtn.addEventListener('click', () => wrongTypeModal.classList.add('hidden'));
+    if (confirmClearBtn) confirmClearBtn.addEventListener('click', () => {
+        resetUI();
         confirmClearModal.classList.add('hidden');
-      });
-      if (closeConfirmModalBtn) closeConfirmModalBtn.addEventListener('click', () => confirmClearModal.classList.add('hidden'));
     });
+    if (closeConfirmModalBtn) closeConfirmModalBtn.addEventListener('click', () => confirmClearModal.classList.add('hidden'));
 
-    // --------------------------------------------------------
-    // PART 2: API & PROCESSING LOGIC (การอัปโหลดและแสดงผล)
-    // --------------------------------------------------------
+
+    // ============================================================
+    // 2. ส่วนประมวลผล (API & Logic) - แก้ไขชื่อ Bucket ตรงนี้ ✅
+    // ============================================================
     const API_BASE = "https://6w4jivfjnf.execute-api.us-east-1.amazonaws.com"; 
 
-    document.getElementById("btnUpload").addEventListener("click", async () => {
-      const status = document.getElementById("status");
-      const file = document.getElementById("file").files[0];
-      
-      if (!file) {
-        status.textContent = "กรุณาเลือกรูปก่อนอัปโหลด";
-        return;
-      }
+    if (processBtn) {
+        processBtn.addEventListener("click", async () => {
+            const file = fileInput.files[0];
+            if (!file) return;
 
-      try {
-        status.textContent = "กำลังประมวลผล...";
-        
-        // 1. ขอ Presigned URL (API เดิมของคุณ)
-        const ext = file.name.split('.').pop().toLowerCase() || "jpg";
-        const pres = await fetch(`${API_BASE}/presign?ext=${ext}`);
-        if (!pres.ok) throw new Error("Presign request failed");
-        const data = await pres.json();
+            // ล็อคปุ่ม
+            const originalBtnText = processBtn.textContent;
+            processBtn.textContent = "กำลังดำเนินการ...";
+            processBtn.disabled = true;
+            
+            try {
+                statusDisplay.textContent = "กำลังเตรียมการอัปโหลด...";
+                statusDisplay.style.color = "#4A4A4A";
 
-        // 2. อัปโหลดรูปไป S3 (API เดิมของคุณ)
-        const form = new FormData();
-        Object.entries(data.upload.fields).forEach(([k, v]) => form.append(k, v));
-        form.append("file", file);
-        const resp = await fetch(data.upload.url, { method: "POST", body: form });
-        if (!resp.ok) throw new Error("Upload failed: " + resp.status);
+                // 1. ขอ Presigned URL
+                const ext = file.name.split('.').pop().toLowerCase() || "jpg";
+                const pres = await fetch(`${API_BASE}/presign?ext=${ext}`);
+                if (!pres.ok) throw new Error("เชื่อมต่อ Server ไม่ได้");
+                const data = await pres.json();
 
-        status.innerHTML = `✅ ประมวลผลสำเร็จ!`;
+                // 2. อัปโหลดรูปไป S3
+                statusDisplay.textContent = "กำลังอัปโหลดรูปภาพ...";
+                const form = new FormData();
+                Object.entries(data.upload.fields).forEach(([k, v]) => form.append(k, v));
+                form.append("file", file);
+                
+                const resp = await fetch(data.upload.url, { method: "POST", body: form });
+                if (!resp.ok) throw new Error("อัปโหลดรูปไม่ผ่าน");
 
-        // ---------------------------------------------------------
-        // 3. จัดการข้อมูล JSON (ส่วนที่เพิ่มใหม่)
-        // จำลองข้อมูล JSON ที่ได้รับกลับมา (ตามรูปตัวอย่างของคุณ)
-        // *หมายเหตุ: ในอนาคตคุณต้อง Fetch json นี้มาจาก DynamoDB หรือ API
-        // ---------------------------------------------------------
-        const mockJsonResponse = {
-            "user_info": { 
-                "bucket": "dermadataaa",
-                "key": data.upload.fields.key // ใช้ Key จริงจากการอัปโหลด
-            },
-            "analysis_labels": [
-                "Acne",
-                "Enlarged-Pores"
-            ],
-            "recommendations": [
-                {
-                    "problem": "Acne",
-                    "name": "the perfecting treatment",
-                    "brand": "la mer",
-                    "price": 8942.5,
-                    "image_url": "https://i0.wp.com/mydbale.com/wp-content/uploads/2022/03/Artboard-1-copy-17-1.jpg", 
-                    "ingredients": "water | dimethicone | isododecane | algae (seaweed) extract"
-                },
-                {
-                     "problem": "Enlarged-Pores",
-                     "name": "Pore Minimizing Serum",
-                     "brand": "Clarins",
-                     "price": 2500,
-                     "image_url": "https://via.placeholder.com/150", 
-                     "ingredients": "Aqua | Glycerin | Silica"
+                // ---------------------------------------------------------
+                // 3. คำนวณ URL ไฟล์ผลลัพธ์ (แก้ไขให้ตรงกับรูปที่คุณส่งมา)
+                // ---------------------------------------------------------
+                statusDisplay.innerHTML = '✅ อัปโหลดเสร็จแล้ว! <b>กำลังวิเคราะห์ผิวและหาสินค้า...</b>';
+                statusDisplay.style.color = '#27ae60';
+
+                // Key ที่ได้จากการอัปโหลด (เช่น uploads/user=.../image.jpg)
+                const uploadKey = data.upload.fields.key; 
+
+                // แปลง Path:
+                // จาก: uploads/.../image.jpg  (หรือ results/...)
+                // เป็น: recommendations/.../image.jpg_final.json
+                
+                let resultKey = uploadKey;
+                
+                // 3.1 เปลี่ยนโฟลเดอร์เป็น recommendations/
+                if (resultKey.startsWith("uploads/")) {
+                    resultKey = resultKey.replace("uploads/", "recommendations/");
+                } else if (resultKey.startsWith("results/")) {
+                    resultKey = resultKey.replace("results/", "recommendations/");
                 }
-            ]
-        };
 
-        // เรียกฟังก์ชันวาด UI
-        renderUI(mockJsonResponse);
+                // 3.2 เติม _final.json ต่อท้าย (ตามที่คุณส่งรูปมาดู)
+                // ผลลัพธ์จะเป็น: .../image.jpg_final.json
+                resultKey = resultKey + "_final.json";
 
-      } catch (err) {
-        status.textContent = "❌ เกิดข้อผิดพลาด: " + err.message;
-        console.error(err);
-      }
-    });
+                // 3.3 สร้าง URL เต็ม (ใช้ชื่อ Bucket ที่ถูกต้อง!)
+                const bucketName = "skin-analysis-output"; // ✅ แก้แล้ว
+                const finalResultUrl = `https://${bucketName}.s3.amazonaws.com/${resultKey}`;
 
-    // --- ฟังก์ชันสำหรับวาด UI จาก JSON (Helper Function) ---
-    function renderUI(data) {
-        // A. ส่วนผลลัพธ์ (Analysis)
-        const analysisContainer = document.getElementById('analysis-container');
-        const analysisText = document.getElementById('analysis-text');
-        
-        // แปลง Array labels เป็นข้อความคั่นด้วย comma
-        const labels = data.analysis_labels.join(', '); 
-        analysisText.innerHTML = `“ตรวจพบปัญหา: <b>${labels}</b> <br>ผิวหน้าของท่านต้องการการดูแลเป็นพิเศษในจุดเหล่านี้...”`;
-        
-        analysisContainer.classList.remove('hidden'); // ลบ class hidden เพื่อโชว์เนื้อหา
+                console.log("🎯 รอรับผลลัพธ์ที่:", finalResultUrl);
 
-        // B. ส่วนสินค้าแนะนำ (Products)
-        const productContainer = document.getElementById('product-container');
-        const productList = document.getElementById('product-list');
-        productList.innerHTML = ''; // เคลียร์ของเก่า (ถ้ามี)
+                // 4. สั่งให้ดึงข้อมูล (Polling)
+                const checkResult = async () => {
+                    // ตรวจสอบว่ามีฟังก์ชัน loadAnalysisResult หรือไม่ (จาก suggestProduct.js)
+                    if (typeof loadAnalysisResult === 'function') {
+                        const isDone = await loadAnalysisResult(finalResultUrl);
+                        
+                        if (isDone) {
+                            // เสร็จแล้ว
+                            processBtn.textContent = originalBtnText;
+                            processBtn.disabled = false;
+                        } else {
+                            // ยังไม่มา รอ 3 วิ แล้วเรียกใหม่
+                            setTimeout(checkResult, 3000);
+                        }
+                    } else {
+                        console.error("Error: หาฟังก์ชัน loadAnalysisResult ไม่เจอ");
+                        statusDisplay.textContent = "เกิดข้อผิดพลาด: ไม่พบ Script แสดงผล";
+                    }
+                };
 
-        data.recommendations.forEach(item => {
-            // แปลง ingredients ที่คั่นด้วย | ให้เป็น <option> ใน Dropdown
-            const ingredientOptions = item.ingredients.split('|').map(ing => `<option>${ing.trim()}</option>`).join('');
+                // เริ่มเช็คครั้งแรก (หน่วง 2 วิ)
+                setTimeout(checkResult, 2000);
 
-            // สร้าง HTML การ์ดสินค้า
-            const cardHTML = `
-            <div class="product-item">
-                <img src="${item.image_url}" alt="${item.name}" class="product-img">
-                <div class="product-info">
-                    <div class="product-header">
-                        <span class="product-name">${item.brand} - ${item.name}</span>
-                        <span class="product-price">ราคา: ${item.price.toLocaleString()} บาท</span>
-                    </div>
-                    <div class="product-problem-tag">สำหรับ: ${item.problem}</div>
-                    
-                    <select class="product-select">
-                        <option selected disabled>ดูส่วนผสม (Ingredients)</option>
-                        ${ingredientOptions}
-                    </select>
-                </div>
-            </div>
-            `;
-            productList.innerHTML += cardHTML;
+            } catch (err) {
+                console.error(err);
+                statusDisplay.textContent = "❌ Error: " + err.message;
+                statusDisplay.style.color = "red";
+                processBtn.textContent = originalBtnText;
+                processBtn.disabled = false;
+            }
         });
-
-        productContainer.classList.remove('hidden'); // ลบ class hidden เพื่อโชว์เนื้อหา
     }
+});
