@@ -323,3 +323,109 @@ body {
     .card { padding: 24px; }
     .sidebar { margin: 12px; height: calc(100% - 24px); }
 }
+
+/* --- Text Styles for Analysis --- */
+.static-text {
+    color: #707070;
+    font-weight: 700;
+    margin: 0 0 8px 0;
+    font-size: 1rem;
+}
+
+.dynamic-text {
+    color: #707070; /* สีเทาตาม Design */
+    font-size: 0.95rem;
+    line-height: 1.6;
+    word-wrap: break-word;
+}
+
+/* --- Product Card Styling (สำหรับสินค้าแนะนำ) --- */
+.product-item {
+    background-color: white; /* พื้นหลังขาว */
+    border-radius: 15px;
+    padding: 16px;
+    display: flex; /* จัดรูปแบบแนวนอน รูปซ้าย-เนื้อหาขวา */
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 16px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.05); /* เงานุ่มๆ */
+}
+
+.product-img {
+    width: 90px;
+    height: 90px;
+    border-radius: 10px;
+    object-fit: cover; /* ให้รูปเต็มกรอบสวยๆ */
+    background-color: #f0f0f0;
+    flex-shrink: 0;
+}
+
+.product-info {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 100%; /* ให้เต็มพื้นที่ที่เหลือ */
+}
+
+.product-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.product-name {
+    font-weight: 700;
+    color: #4A4A4A;
+    font-size: 1rem;
+    flex: 1; /* ชื่อยาวให้ขยายได้ */
+}
+
+.product-price {
+    color: #707070;
+    font-size: 0.95rem;
+    white-space: nowrap; /* ราคาห้ามตกบรรทัด */
+}
+
+.product-problem-tag {
+    font-size: 0.8rem;
+    background-color: #e0e0e0;
+    color: #555;
+    padding: 2px 8px;
+    border-radius: 4px;
+    align-self: flex-start;
+    margin-bottom: 4px;
+}
+
+.product-select {
+    width: 100%;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid #ddd;
+    background-color: #f9f9f9;
+    font-family: p; /* ใช้ฟอนต์เดียวกับเว็บ */
+    color: #555;
+    outline: none;
+    cursor: pointer;
+}
+
+/* จัดให้ดูดีบนมือถือ */
+@media (max-width: 480px) {
+    .product-item {
+        flex-direction: column; /* เปลี่ยนเป็นแนวตั้ง */
+        align-items: center;
+        text-align: center;
+    }
+    
+    .product-header {
+        justify-content: center;
+        flex-direction: column;
+        gap: 2px;
+    }
+    
+    .product-problem-tag {
+        align-self: center;
+    }
+}
