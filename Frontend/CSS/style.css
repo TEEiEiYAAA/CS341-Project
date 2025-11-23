@@ -339,6 +339,18 @@ body {
     word-wrap: break-word;
 }
 
+/* ส่วนข้อความผลลัพธ์ */
+#analysis-container {
+    background-color: transparent; /* หรือสีพื้นตามดีไซน์ */
+    padding: 10px 0;
+}
+
+/* เน้นตัวหนังสือปัญหาผิวให้หนาขึ้นนิดนึง เพื่อความชัดเจน */
+.dynamic-text b {
+    color: #555; 
+    font-weight: 700;
+}
+
 /* --- Product Card Styling (สำหรับสินค้าแนะนำ) --- */
 .product-item {
     background-color: white; /* พื้นหลังขาว */
@@ -409,6 +421,76 @@ body {
     color: #555;
     outline: none;
     cursor: pointer;
+}
+
+/* CSS/style.css */
+
+/* ลบ Style ของ Select เดิมออก (ถ้าไม่ใช้แล้ว) */
+/* .product-select { ... } */
+
+/* --- Accordion Style (แบบใหม่) --- */
+.ing-accordion {
+    width: 100%;
+    background-color: #fff; /* พื้นหลังขาวตามภาพ */
+    border-radius: 12px;    /* มุมมน */
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05); /* เงาบางๆ */
+    overflow: hidden;
+    border: 1px solid #eee; /* เส้นขอบบางๆ */
+}
+
+/* ส่วนหัว (ที่คลิกได้) */
+.ing-accordion summary {
+    padding: 12px 16px;
+    cursor: pointer;
+    font-weight: 700;
+    color: #4A4A4A; /* สีหัวข้อเข้ม */
+    font-size: 0.95rem;
+    list-style: none; /* ซ่อนสามเหลี่ยมเดิม */
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: #fff;
+    transition: background-color 0.2s;
+}
+
+/* ซ่อนสามเหลี่ยมเดิมของ Chrome/Safari */
+.ing-accordion summary::-webkit-details-marker {
+    display: none;
+}
+
+.ing-accordion summary:hover {
+    background-color: #f9f9f9;
+}
+
+/* ไอคอนลูกศร */
+.arrow-icon {
+    transition: transform 0.3s ease;
+    color: #888;
+}
+
+/* เมื่อเปิดให้หมุนลูกศร */
+.ing-accordion[open] .arrow-icon {
+    transform: rotate(180deg);
+}
+
+/* ส่วนเนื้อหา (ลิสต์รายการ) */
+.ing-content {
+    background-color: #fff;
+    border-top: 1px solid #f0f0f0;
+}
+
+/* แต่ละบรรทัดข้างใน */
+.ing-row {
+    padding: 12px 16px;
+    border-bottom: 1px dashed #eee; /* เส้นประคั่นระหว่างบรรทัด */
+    font-size: 0.9rem;
+    color: #666;
+    display: flex;
+    justify-content: space-between;
+}
+
+.ing-row:last-child {
+    border-bottom: none; /* บรรทัดสุดท้ายไม่มีเส้น */
 }
 
 /* จัดให้ดูดีบนมือถือ */
