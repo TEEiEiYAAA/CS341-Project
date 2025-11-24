@@ -58,12 +58,18 @@ async function loadAnalysisResult(jsonUrl) {
         // 1. สร้างดิกชันนารีแปลภาษา
         const problemMapping = {
             "Acne": "สิว",
-            "Enlarged-Pores": "รูขุมขนกว้าง",
+            "Blackheads": "สิวหัวดำ",
+            "Whiteheads": "สิวหัวขาว",
             "Oily-Skin": "ผิวมัน",
-            "Dry-Skin": "ผิวแห้ง",
-            "Dark-Spots": "จุดด่างดำ",
+            "Enlarged-Pores": "รูขุมขนกว้าง",
+            "Englarged-Pores": "รูขุมขนกว้าง",
             "Wrinkles": "ริ้วรอย",
-            "Redness": "รอยแดง"
+            "Dark-Spots": "จุดด่างดำ",
+            "Skin-Redness": "รอยแดง",
+            "Redness": "รอยแดง",
+            "Dry-Skin": "ผิวแห้ง",
+            "Eyebags": "ถุงใต้ตา",
+            "wrinkles-acne-pores": "ปัญหาริ้วรอย สิว และรูขุมขน"
         };
 
         if (analysisText) {

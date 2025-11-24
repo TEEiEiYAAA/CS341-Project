@@ -6,8 +6,8 @@ import secrets # <- เพิ่ม import นี้
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-ALLOWED_EXT = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png"}
-CORS_ORIGIN = os.environ.get("CORS_ORIGIN", "https://dermavision-staticweb.s3.us-east-1.amazonaws.com")
+ALLOWED_EXT = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp", "heic": "image/heic"}
+CORS_ORIGIN = os.environ.get("CORS_ORIGIN", "https://dermavision.s3.us-east-1.amazonaws.com")
 
 s3 = boto3.client("s3") # <- ย้าย s3 client มาไว้ข้างนอก
 

@@ -28,6 +28,12 @@ body {
     transition: transform 0.3s ease-in-out;
     flex-shrink: 0;
     margin-right: 24px;
+    position: -webkit-sticky; /* สำหรับ Safari */
+    position: sticky;         /* คำสั่งหลัก */
+    top: 24px;                /* ให้ห่างจากขอบบน 24px (เท่ากับ padding ของ body) */
+    height: calc(100vh - 48px); /* ความสูงเต็มจอ ลบ padding บน-ล่าง (24+24) */
+    overflow-y: auto;         /* ถ้าจอเตี้ยกว่าเมนู ให้เมนูเลื่อนขึ้นลงได้เอง */
+    transition: transform 0.3s ease-in-out;
 }
 
 .sidebar-top, .sidebar-bottom {
